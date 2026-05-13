@@ -367,6 +367,47 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
   font-weight: 700;
 }
 
+.section-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.section-toolbar .section-title {
+  margin-bottom: 0;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.btn-export {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0.45rem 0.85rem;
+  background: rgba(16,185,129,0.14);
+  border: 1px solid rgba(16,185,129,0.35);
+  color: #86efac;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.btn-export:hover:not(:disabled) {
+  background: rgba(16,185,129,0.22);
+  border-color: rgba(16,185,129,0.55);
+  transform: translateY(-1px);
+}
+.btn-export:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.export-status { margin-bottom: 1rem; }
+
 /* ── Realtime Clock ── */
 .realtime-clock {
   background: linear-gradient(135deg, var(--surface-3), var(--surface-2));

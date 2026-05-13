@@ -12,35 +12,117 @@ export default function TeacherDashboard() {
     const [studentLogs, setStudentLogs] = useState([])
     const [loadingStudents, setLoadingStudents] = useState(false)
     const [loadingLogs, setLoadingLogs] = useState(false)
+    const [exportingClass, setExportingClass] = useState(false)
+    const [exportMessage, setExportMessage] = useState('')
+    const [exportError, setExportError] = useState('')
 
     useEffect(() => {
         setSelectedStudent(null)
         setStudentLogs([])
+        setExportMessage('')
+        setExportError('')
         fetchStudents(activeClass)
     }, [activeClass])
 
     async function fetchStudents(className) {
         setLoadingStudents(true)
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('class_name', className)
             .eq('role', 'student')
             .order('student_number', { ascending: true })
-        setStudents(data || [])
+
+        if (error) {
+            console.error('fetchStudents error:', error)
+            setStudents([])
+        } else {
+            setStudents(data || [])
+        }
+
         setLoadingStudents(false)
     }
 
     async function handleStudentClick(student) {
         setSelectedStudent(student)
         setLoadingLogs(true)
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('activity_logs')
             .select('*')
             .eq('student_id', student.id)
             .order('recorded_at', { ascending: false })
-        setStudentLogs(data || [])
+
+        if (error) {
+            console.error('fetchStudentLogs error:', error)
+            setStudentLogs([])
+        } else {
+            setStudentLogs(data || [])
+        }
+
         setLoadingLogs(false)
+    }
+
+    async function handleClassExport() {
+        if (students.length === 0) return
+
+        setExportingClass(true)
+        setExportMessage('')
+        setExportError('')
+
+        try {
+            const studentIds = students.map((student) => student.id)
+            const { data, error } = await supabase
+                .from('activity_logs')
+                .select('id, student_id, content, recorded_at')
+                .in('student_id', studentIds)
+                .order('recorded_at', { ascending: true })
+
+            if (error) throw error
+
+            const logsByStudent = new Map()
+            for (const log of data || []) {
+                const existing = logsByStudent.get(log.student_id) || []
+                existing.push(log)
+                logsByStudent.set(log.student_id, existing)
+            }
+
+            const rows = students.map((student) => {
+                const logs = logsByStudent.get(student.id) || []
+                const latestLog = logs[logs.length - 1]
+                const combinedLogs = logs
+                    .map((log, index) => {
+                        return `${index + 1}. [${formatDateTime(log.recorded_at)}]\n${log.content}`
+                    })
+                    .join('\n\n')
+
+                return [
+                    student.class_name,
+                    student.student_number,
+                    student.name,
+                    logs.length,
+                    latestLog ? formatDateTime(latestLog.recorded_at) : '',
+                    combinedLogs,
+                ]
+            })
+
+            const headers = [
+                '반',
+                '번호',
+                '이름',
+                '기록 수',
+                '최근 기록일',
+                '생활기록부 참고 활동 기록',
+            ]
+            const csv = toCsv([headers, ...rows])
+            const filename = `${safeFilename(activeClass)}_생활기록부_활동기록_${getDateStamp()}.csv`
+            downloadCsv(csv, filename)
+            setExportMessage(`${activeClass} 자료 다운로드 완료`)
+        } catch (error) {
+            console.error('exportClassLogs error:', error)
+            setExportError('엑셀 데이터를 만들지 못했습니다.')
+        } finally {
+            setExportingClass(false)
+        }
     }
 
     function formatDateTime(isoString) {
@@ -55,9 +137,41 @@ export default function TeacherDashboard() {
         })
     }
 
+    function getDateStamp() {
+        const d = new Date()
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}${month}${day}`
+    }
+
+    function safeFilename(value) {
+        return String(value).replace(/[\\/:*?"<>|]/g, '')
+    }
+
+    function escapeCsvCell(value) {
+        const text = String(value ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+        return `"${text.replace(/"/g, '""')}"`
+    }
+
+    function toCsv(rows) {
+        return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n')
+    }
+
+    function downloadCsv(csv, filename) {
+        const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = filename
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+    }
+
     return (
         <div className="app-container">
-            {/* Header */}
             <header className="app-header">
                 <div className="header-info">
                     <span className="header-badge teacher-badge">교사</span>
@@ -69,7 +183,6 @@ export default function TeacherDashboard() {
                 <button className="btn-logout" onClick={signOut}>로그아웃</button>
             </header>
 
-            {/* Class Tabs */}
             <div className="class-tab-wrapper">
                 <div className="class-tab-scroll">
                     {CLASSES.map((cls) => (
@@ -85,7 +198,6 @@ export default function TeacherDashboard() {
             </div>
 
             <main className="main-content">
-                {/* Student Detail View */}
                 {selectedStudent ? (
                     <div className="detail-section">
                         <button
@@ -128,14 +240,26 @@ export default function TeacherDashboard() {
                         )}
                     </div>
                 ) : (
-                    /* Student List */
                     <div className="student-list-section">
-                        <h2 className="section-title">
-                            {activeClass} 학생 목록
-                            {!loadingStudents && (
-                                <span className="badge">{students.length}명</span>
-                            )}
-                        </h2>
+                        <div className="section-toolbar">
+                            <h2 className="section-title">
+                                {activeClass} 학생 목록
+                                {!loadingStudents && (
+                                    <span className="badge">{students.length}명</span>
+                                )}
+                            </h2>
+                            <button
+                                type="button"
+                                className="btn-export"
+                                onClick={handleClassExport}
+                                disabled={loadingStudents || exportingClass || students.length === 0}
+                            >
+                                {exportingClass ? <span className="btn-spinner" /> : '엑셀 다운로드'}
+                            </button>
+                        </div>
+
+                        {exportMessage && <div className="success-msg export-status">{exportMessage}</div>}
+                        {exportError && <div className="error-msg export-status">{exportError}</div>}
 
                         {loadingStudents ? (
                             <div className="center-spinner"><div className="spinner" /></div>
