@@ -18,6 +18,8 @@ export default function TeacherDashboard() {
     const [loadingStudents, setLoadingStudents] = useState(false)
     const [loadingLogs, setLoadingLogs] = useState(false)
     const [exportingClass, setExportingClass] = useState(false)
+    const [syncingSheet, setSyncingSheet] = useState(false)
+    const [sheetLink, setSheetLink] = useState('')
     const [exportMessage, setExportMessage] = useState('')
     const [exportError, setExportError] = useState('')
     const [studentInviteCode, setStudentInviteCode] = useState('')
@@ -34,6 +36,7 @@ export default function TeacherDashboard() {
         setStudentLogs([])
         setExportMessage('')
         setExportError('')
+        setSheetLink('')
         if (view === 'students') fetchStudents(activeClass)
     }, [activeClass, view, profile?.id])
 
@@ -247,6 +250,41 @@ export default function TeacherDashboard() {
         }
     }
 
+    async function handleGoogleSheetSync() {
+        setSyncingSheet(true)
+        setExportMessage('')
+        setExportError('')
+        setSheetLink('')
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session?.access_token) throw new Error('로그인이 필요합니다.')
+
+            const response = await fetch('/api/class-sheet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ className: activeClass }),
+            })
+            const result = await response.json()
+            if (!response.ok) throw new Error(result.error || '구글시트 반영에 실패했습니다.')
+
+            setSheetLink(result.url)
+            setExportMessage(
+                result.created
+                    ? `${activeClass} 구글시트 사본을 만들고 A~E열을 채웠습니다.`
+                    : `${activeClass} 기존 구글시트 사본의 A~E열을 덮어썼습니다.`
+            )
+        } catch (error) {
+            console.error('handleGoogleSheetSync error:', error)
+            setExportError(error.message)
+        } finally {
+            setSyncingSheet(false)
+        }
+    }
+
     function getUniqueTags(logs) {
         return [...new Set(logs.flatMap((log) => getLogTags(log)))]
     }
@@ -395,6 +433,14 @@ export default function TeacherDashboard() {
                                 >
                                     {exportingClass ? <span className="btn-spinner" /> : '엑셀 다운로드'}
                                 </button>
+                                <button
+                                    type="button"
+                                    className="btn-export"
+                                    onClick={handleGoogleSheetSync}
+                                    disabled={loadingStudents || syncingSheet}
+                                >
+                                    {syncingSheet ? <span className="btn-spinner" /> : '구글시트 반영'}
+                                </button>
                             </div>
                         </div>
 
@@ -407,6 +453,12 @@ export default function TeacherDashboard() {
                         )}
                         {exportMessage && <div className="success-msg export-status">{exportMessage}</div>}
                         {exportError && <div className="error-msg export-status">{exportError}</div>}
+                        {sheetLink && (
+                            <div className="sheet-link-box">
+                                <span>생성/업데이트된 구글시트</span>
+                                <a href={sheetLink} target="_blank" rel="noreferrer">구글시트 열기</a>
+                            </div>
+                        )}
 
                         {loadingStudents ? (
                             <div className="center-spinner"><div className="spinner" /></div>
