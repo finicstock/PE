@@ -453,11 +453,84 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
 /* ── Write Form ── */
 .write-section { display: flex; flex-direction: column; }
 .write-form { display: flex; flex-direction: column; gap: 1rem; }
+.write-mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.write-mode-btn {
+  min-height: 38px;
+  padding: 0.55rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+.write-mode-btn.active {
+  background: rgba(79,70,229,0.24);
+  color: #c4b5fd;
+}
+.write-mode-btn:hover:not(.active) {
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.write-mode-btn:active { transform: translateY(1px); }
+.template-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.template-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.template-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.template-field textarea {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  padding: 0.75rem 1rem;
+  resize: vertical;
+  min-height: 78px;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.template-field textarea::placeholder { color: var(--text-dim); }
+.template-field textarea:focus {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.18);
+}
 .char-count {
   font-size: 0.75rem;
   color: var(--text-dim);
   text-align: right;
   margin-top: 0.2rem;
+}
+.draft-status {
+  align-self: flex-end;
+  min-height: 20px;
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  font-weight: 600;
 }
 
 .tag-selector {
