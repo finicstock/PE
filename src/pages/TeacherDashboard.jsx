@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import { getLogContent, getLogTags } from '../lib/activityTags'
@@ -190,7 +191,10 @@ export default function TeacherDashboard() {
                         <span className="header-sub">관리자 대시보드</span>
                     </div>
                 </div>
-                <button className="btn-logout" onClick={signOut}>로그아웃</button>
+                <div className="header-actions">
+                    <Link className="btn-secondary" to="/mypage">마이페이지</Link>
+                    <button className="btn-logout" onClick={signOut}>로그아웃</button>
+                </div>
             </header>
 
             <div className="class-tab-wrapper">

@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import StudentHome from './pages/StudentHome'
 import TeacherDashboard from './pages/TeacherDashboard'
+import MyPage from './pages/MyPage'
 
 export default function App() {
     return (
@@ -27,6 +28,14 @@ export default function App() {
                         element={
                             <ProtectedRoute requiredRole="teacher">
                                 <TeacherDashboard />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/mypage"
+                        element={
+                            <ProtectedRoute>
+                                <MyPage />
                             </ProtectedRoute>
                         }
                     />

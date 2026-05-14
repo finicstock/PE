@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -244,7 +245,10 @@ export default function StudentHome() {
                         <span className="header-sub">{profile?.class_name} {profile?.student_number}번</span>
                     </div>
                 </div>
-                <button className="btn-logout" onClick={signOut}>로그아웃</button>
+                <div className="header-actions">
+                    <Link className="btn-secondary" to="/mypage">마이페이지</Link>
+                    <button className="btn-logout" onClick={signOut}>로그아웃</button>
+                </div>
             </header>
 
             <div className="tab-bar">

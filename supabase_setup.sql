@@ -53,6 +53,12 @@ CREATE POLICY "user_insert_own_profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+-- 사용자: 본인 프로필만 수정 가능
+CREATE POLICY "user_update_own_profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
 -- ── activity_logs 정책 ─────────────────────────────────────
 
 -- 학생: 본인 기록만 조회
