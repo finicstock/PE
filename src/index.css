@@ -460,6 +460,55 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
   margin-top: 0.2rem;
 }
 
+.tag-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.tag-option,
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.tag-option {
+  min-height: 34px;
+  padding: 0.45rem 0.75rem;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+}
+.tag-option:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+.tag-option.active {
+  background: rgba(6,182,212,0.18);
+  border-color: rgba(6,182,212,0.55);
+  color: #67e8f9;
+}
+.tag-option:active { transform: translateY(1px); }
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+.tag-chip {
+  padding: 0.32rem 0.55rem;
+  background: rgba(6,182,212,0.13);
+  border: 1px solid rgba(6,182,212,0.28);
+  color: #67e8f9;
+}
+
 /* ── Log Cards ── */
 .log-list { display: flex; flex-direction: column; gap: 0.75rem; }
 .log-card {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
+import { getLogContent, getLogTags } from '../lib/activityTags'
 
 const CLASSES = Array.from({ length: 10 }, (_, i) => `${i + 1}반`)
 
@@ -73,7 +74,7 @@ export default function TeacherDashboard() {
             const studentIds = students.map((student) => student.id)
             const { data, error } = await supabase
                 .from('activity_logs')
-                .select('id, student_id, content, recorded_at')
+                .select('*')
                 .in('student_id', studentIds)
                 .order('recorded_at', { ascending: true })
 
@@ -89,9 +90,12 @@ export default function TeacherDashboard() {
             const rows = students.map((student) => {
                 const logs = logsByStudent.get(student.id) || []
                 const latestLog = logs[logs.length - 1]
+                const tagSummary = getUniqueTags(logs).join(', ')
                 const combinedLogs = logs
                     .map((log, index) => {
-                        return `${index + 1}. [${formatDateTime(log.recorded_at)}]\n${log.content}`
+                        const tags = getLogTags(log)
+                        const tagText = tags.length ? ` (${tags.join(', ')})` : ''
+                        return `${index + 1}. [${formatDateTime(log.recorded_at)}]${tagText}\n${getLogContent(log)}`
                     })
                     .join('\n\n')
 
@@ -101,6 +105,7 @@ export default function TeacherDashboard() {
                     student.name,
                     logs.length,
                     latestLog ? formatDateTime(latestLog.recorded_at) : '',
+                    tagSummary,
                     combinedLogs,
                 ]
             })
@@ -111,6 +116,7 @@ export default function TeacherDashboard() {
                 '이름',
                 '기록 수',
                 '최근 기록일',
+                '태그',
                 '생활기록부 참고 활동 기록',
             ]
             const csv = toCsv([headers, ...rows])
@@ -123,6 +129,10 @@ export default function TeacherDashboard() {
         } finally {
             setExportingClass(false)
         }
+    }
+
+    function getUniqueTags(logs) {
+        return [...new Set(logs.flatMap((log) => getLogTags(log)))]
     }
 
     function formatDateTime(isoString) {
@@ -230,12 +240,16 @@ export default function TeacherDashboard() {
                             </div>
                         ) : (
                             <div className="log-list">
-                                {studentLogs.map((log) => (
-                                    <div key={log.id} className="log-card">
-                                        <div className="log-date">{formatDateTime(log.recorded_at)}</div>
-                                        <div className="log-content">{log.content}</div>
-                                    </div>
-                                ))}
+                                {studentLogs.map((log) => {
+                                    const tags = getLogTags(log)
+                                    return (
+                                        <div key={log.id} className="log-card">
+                                            <div className="log-date">{formatDateTime(log.recorded_at)}</div>
+                                            {tags.length > 0 && <TagList tags={tags} />}
+                                            <div className="log-content">{getLogContent(log)}</div>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         )}
                     </div>
@@ -286,6 +300,16 @@ export default function TeacherDashboard() {
                     </div>
                 )}
             </main>
+        </div>
+    )
+}
+
+function TagList({ tags }) {
+    return (
+        <div className="tag-list">
+            {tags.map((tag) => (
+                <span key={tag} className="tag-chip">{tag}</span>
+            ))}
         </div>
     )
 }

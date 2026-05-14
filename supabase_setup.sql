@@ -18,9 +18,14 @@ CREATE TABLE IF NOT EXISTS public.activity_logs (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id   UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   content      TEXT NOT NULL,
+  tags         TEXT[] NOT NULL DEFAULT '{}',
   recorded_at  TIMESTAMPTZ DEFAULT NOW(),  -- 제출 시 클라이언트 실시간 시각 저장
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 기존에 만든 프로젝트라면 태그 컬럼만 추가됩니다.
+ALTER TABLE public.activity_logs
+  ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
 
 -- 3. Row Level Security 활성화
 ALTER TABLE public.profiles     ENABLE ROW LEVEL SECURITY;

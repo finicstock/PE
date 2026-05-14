@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
+import {
+    ACTIVITY_TAGS,
+    buildTaggedContent,
+    getLogContent,
+    getLogTags,
+    shouldRetryWithoutTags,
+} from '../lib/activityTags'
 
 export default function StudentHome() {
     const { profile, signOut } = useAuth()
-    const [tab, setTab] = useState('write') // 'write' | 'history'
+    const [tab, setTab] = useState('write')
     const [content, setContent] = useState('')
+    const [selectedTags, setSelectedTags] = useState([])
     const [logs, setLogs] = useState([])
     const [submitting, setSubmitting] = useState(false)
     const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -23,30 +31,65 @@ export default function StudentHome() {
             .select('*')
             .eq('student_id', profile.id)
             .order('recorded_at', { ascending: false })
-        if (!error) setLogs(data)
+
+        if (error) {
+            console.error('fetchLogs error:', error)
+            setLogs([])
+        } else {
+            setLogs(data || [])
+        }
+
         setLoadingLogs(false)
+    }
+
+    function toggleTag(tag) {
+        setSelectedTags((current) => {
+            if (current.includes(tag)) {
+                return current.filter((item) => item !== tag)
+            }
+            return [...current, tag]
+        })
     }
 
     async function handleSubmit(e) {
         e.preventDefault()
-        if (!content.trim()) return
+        const trimmedContent = content.trim()
+        if (!trimmedContent) return
+
         setError('')
         setSubmitting(true)
         setSubmitSuccess(false)
 
-        const { error } = await supabase.from('activity_logs').insert({
+        const basePayload = {
             student_id: profile.id,
-            content: content.trim(),
+            content: trimmedContent,
             recorded_at: new Date().toISOString(),
-        })
+        }
+
+        const initialPayload = selectedTags.length > 0
+            ? { ...basePayload, tags: selectedTags }
+            : basePayload
+
+        let { error } = await supabase.from('activity_logs').insert(initialPayload)
+
+        if (shouldRetryWithoutTags(error)) {
+            const fallbackContent = buildTaggedContent(trimmedContent, selectedTags)
+            const retry = await supabase.from('activity_logs').insert({
+                ...basePayload,
+                content: fallbackContent,
+            })
+            error = retry.error
+        }
 
         if (error) {
             setError('제출 중 오류가 발생했습니다: ' + error.message)
         } else {
             setSubmitSuccess(true)
             setContent('')
+            setSelectedTags([])
             setTimeout(() => setSubmitSuccess(false), 3000)
         }
+
         setSubmitting(false)
     }
 
@@ -64,7 +107,6 @@ export default function StudentHome() {
 
     return (
         <div className="app-container">
-            {/* Header */}
             <header className="app-header">
                 <div className="header-info">
                     <span className="header-badge student-badge">학생</span>
@@ -76,23 +118,21 @@ export default function StudentHome() {
                 <button className="btn-logout" onClick={signOut}>로그아웃</button>
             </header>
 
-            {/* Tabs */}
             <div className="tab-bar">
                 <button
                     className={`tab-btn ${tab === 'write' ? 'active' : ''}`}
                     onClick={() => setTab('write')}
                 >
-                    ✏️ 활동 기록하기
+                    활동 기록하기
                 </button>
                 <button
                     className={`tab-btn ${tab === 'history' ? 'active' : ''}`}
                     onClick={() => setTab('history')}
                 >
-                    📋 내 기록 보기
+                    내 기록 보기
                 </button>
             </div>
 
-            {/* Content */}
             <main className="main-content">
                 {tab === 'write' && (
                     <div className="write-section">
@@ -115,9 +155,26 @@ export default function StudentHome() {
                                 <span className="char-count">{content.length}자</span>
                             </div>
 
+                            <div className="form-group">
+                                <label>활동 태그</label>
+                                <div className="tag-selector" role="group" aria-label="활동 태그 선택">
+                                    {ACTIVITY_TAGS.map((tag) => (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            className={`tag-option ${selectedTags.includes(tag) ? 'active' : ''}`}
+                                            aria-pressed={selectedTags.includes(tag)}
+                                            onClick={() => toggleTag(tag)}
+                                        >
+                                            {tag}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {error && <div className="error-msg">{error}</div>}
                             {submitSuccess && (
-                                <div className="success-msg">✅ 활동이 성공적으로 기록되었습니다!</div>
+                                <div className="success-msg">활동이 성공적으로 기록되었습니다!</div>
                             )}
 
                             <button
@@ -125,7 +182,7 @@ export default function StudentHome() {
                                 className="btn-primary"
                                 disabled={submitting || !content.trim()}
                             >
-                                {submitting ? <span className="btn-spinner" /> : '📤 제출하기'}
+                                {submitting ? <span className="btn-spinner" /> : '제출하기'}
                             </button>
                         </form>
                     </div>
@@ -143,17 +200,31 @@ export default function StudentHome() {
                             </div>
                         ) : (
                             <div className="log-list">
-                                {logs.map((log) => (
-                                    <div key={log.id} className="log-card">
-                                        <div className="log-date">{formatDateTime(log.recorded_at)}</div>
-                                        <div className="log-content">{log.content}</div>
-                                    </div>
-                                ))}
+                                {logs.map((log) => {
+                                    const tags = getLogTags(log)
+                                    return (
+                                        <div key={log.id} className="log-card">
+                                            <div className="log-date">{formatDateTime(log.recorded_at)}</div>
+                                            {tags.length > 0 && <TagList tags={tags} />}
+                                            <div className="log-content">{getLogContent(log)}</div>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         )}
                     </div>
                 )}
             </main>
+        </div>
+    )
+}
+
+function TagList({ tags }) {
+    return (
+        <div className="tag-list">
+            {tags.map((tag) => (
+                <span key={tag} className="tag-chip">{tag}</span>
+            ))}
         </div>
     )
 }
@@ -166,10 +237,15 @@ function RealtimeClock() {
     }, [])
 
     const date = now.toLocaleDateString('ko-KR', {
-        year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long',
     })
     const time = now.toLocaleTimeString('ko-KR', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
     })
 
     return (
