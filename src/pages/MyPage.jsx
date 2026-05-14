@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
+import { getRoleBadgeClass, getRoleLabel, ROLES } from '../lib/roles'
 
 const CLASSES = Array.from({ length: 10 }, (_, i) => `${i + 1}반`)
 
@@ -16,10 +17,10 @@ export default function MyPage() {
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
 
-    const isStudent = profile?.role === 'student'
-    const backPath = profile?.role === 'teacher' ? '/teacher' : '/student'
-    const roleLabel = profile?.role === 'teacher' ? '교사' : '학생'
-    const badgeClass = profile?.role === 'teacher' ? 'teacher-badge' : 'student-badge'
+    const isStudent = profile?.role === ROLES.STUDENT
+    const backPath = isStudent ? '/student' : '/teacher'
+    const roleLabel = getRoleLabel(profile?.role)
+    const badgeClass = getRoleBadgeClass(profile?.role)
 
     const hasChanges = useMemo(() => {
         if (!profile) return false

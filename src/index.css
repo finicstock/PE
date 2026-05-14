@@ -414,6 +414,13 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
   min-width: 0;
   flex-wrap: wrap;
 }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
 .btn-export {
   flex-shrink: 0;
   min-height: 36px;
@@ -442,6 +449,133 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
   cursor: not-allowed;
 }
 .export-status { margin-bottom: 1rem; }
+
+.btn-danger-soft {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0.45rem 0.85rem;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.btn-danger-soft:hover {
+  background: #ffe4e6;
+  border-color: #fda4af;
+  transform: translateY(-1px);
+}
+
+.admin-view-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.admin-view-tab {
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+.admin-view-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: #eff6ff;
+}
+
+.management-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+.panel-card p {
+  font-size: 0.85rem;
+}
+
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.invite-list h3 {
+  color: var(--text);
+}
+.invite-code-box {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+}
+.invite-code-box span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+.invite-code-box strong {
+  display: block;
+  color: var(--primary-dark);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+}
+.invite-code-box p {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+.invite-code-box.muted {
+  opacity: 0.62;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.admin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+}
+.admin-item strong,
+.admin-item span {
+  display: block;
+}
+.admin-item strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.admin-item span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
 
 /* ── Realtime Clock ── */
 .realtime-clock {
@@ -655,6 +789,12 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
 }
 .empty-state span { font-size: 3rem; }
 .empty-state p { font-size: 0.9rem; line-height: 1.7; }
+.empty-state.compact {
+  padding: 2rem 1rem;
+}
+.empty-state.compact span {
+  font-size: 2.2rem;
+}
 
 /* ── Student List (Teacher) ── */
 .student-list { display: flex; flex-direction: column; gap: 0.5rem; }
@@ -689,6 +829,16 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
   text-align: center;
 }
 .student-name { flex: 1; font-size: 1rem; font-weight: 600; color: var(--text); }
+.student-owner {
+  flex-shrink: 0;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  color: #047857;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+}
 .student-arrow { color: var(--text-dim); font-size: 1rem; transition: transform 0.2s; }
 .student-item:hover .student-arrow { transform: translateX(4px); color: var(--primary-light); }
 
@@ -804,5 +954,19 @@ p  { color: var(--text-muted); font-size: 0.9rem; }
     width: 100%;
     min-height: 32px;
     padding-inline: 0.65rem;
+  }
+  .section-toolbar {
+    flex-direction: column;
+  }
+  .toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .toolbar-actions .btn-export {
+    flex: 1;
+  }
+  .admin-item {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

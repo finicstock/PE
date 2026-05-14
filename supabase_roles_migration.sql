@@ -1,27 +1,20 @@
--- SmallTalK Project - Supabase initial setup.
--- For an existing database, run supabase_roles_migration.sql instead.
+-- Master/sub administrator migration for SmallTalK Project.
+-- Run this once in the Supabase SQL Editor for an existing project.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('student', 'teacher', 'sub_teacher')),
-  class_name TEXT,
-  student_number INT,
-  manager_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS manager_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
 
-CREATE TABLE IF NOT EXISTS public.activity_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  tags TEXT[] NOT NULL DEFAULT '{}',
-  recorded_at TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE public.profiles
+  DROP CONSTRAINT IF EXISTS profiles_role_check;
+
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_role_check
+  CHECK (role IN ('student', 'teacher', 'sub_teacher'));
 
 CREATE TABLE IF NOT EXISTS public.invite_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,14 +27,11 @@ CREATE TABLE IF NOT EXISTS public.invite_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE public.activity_logs
-  ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS invite_codes_owner_idx
+  ON public.invite_codes(owner_id, invite_type, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS profiles_manager_idx
   ON public.profiles(manager_id, role);
-
-CREATE INDEX IF NOT EXISTS invite_codes_owner_idx
-  ON public.invite_codes(owner_id, invite_type, created_at DESC);
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
@@ -87,6 +77,17 @@ AS $$
       )
   );
 $$;
+
+DROP POLICY IF EXISTS "student_view_own_profile" ON public.profiles;
+DROP POLICY IF EXISTS "teacher_view_all_profiles" ON public.profiles;
+DROP POLICY IF EXISTS "user_insert_own_profile" ON public.profiles;
+DROP POLICY IF EXISTS "user_update_own_profile" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_self" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_master_all" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_sub_teacher_students" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_insert_own_student" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_self" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_master_sub_teachers" ON public.profiles;
 
 CREATE POLICY "profiles_select_self"
   ON public.profiles FOR SELECT
@@ -167,10 +168,20 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS guard_profile_sensitive_fields_trigger ON public.profiles;
 CREATE TRIGGER guard_profile_sensitive_fields_trigger
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.guard_profile_sensitive_fields();
+
+DROP POLICY IF EXISTS "student_view_own_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "student_insert_own_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "teacher_view_all_logs" ON public.activity_logs;
+DROP POLICY IF EXISTS "activity_logs_select_self" ON public.activity_logs;
+DROP POLICY IF EXISTS "activity_logs_select_master_all" ON public.activity_logs;
+DROP POLICY IF EXISTS "activity_logs_select_sub_teacher_students" ON public.activity_logs;
+DROP POLICY IF EXISTS "activity_logs_select_teacher_managed" ON public.activity_logs;
+DROP POLICY IF EXISTS "activity_logs_insert_own_student" ON public.activity_logs;
 
 CREATE POLICY "activity_logs_select_self"
   ON public.activity_logs FOR SELECT
@@ -191,6 +202,9 @@ CREATE POLICY "activity_logs_insert_own_student"
         AND student.is_active = TRUE
     )
   );
+
+DROP POLICY IF EXISTS "invite_codes_select_owner" ON public.invite_codes;
+DROP POLICY IF EXISTS "invite_codes_update_owner" ON public.invite_codes;
 
 CREATE POLICY "invite_codes_select_owner"
   ON public.invite_codes FOR SELECT
@@ -331,10 +345,3 @@ GRANT EXECUTE ON FUNCTION public.redeem_invite_code(TEXT, TEXT, TEXT, INT) TO au
 GRANT EXECUTE ON FUNCTION public.current_user_role() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.current_user_is_active() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.can_manage_student(UUID) TO authenticated;
-
--- To make a manually-created teacher account the master administrator:
--- 1. Create the user in Supabase Authentication.
--- 2. Copy that user's UUID.
--- 3. Run:
--- INSERT INTO public.profiles (id, name, role, class_name, student_number, is_active)
--- VALUES ('USER_UUID_HERE', 'Master Admin', 'teacher', NULL, NULL, TRUE);

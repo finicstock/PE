@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { isTeacherRole } from '../lib/roles'
 
 export default function Login() {
     const [email, setEmail] = useState('')
@@ -14,7 +15,7 @@ export default function Login() {
     // profile이 로드되면 role에 따라 이동
     useEffect(() => {
         if (profile) {
-            if (profile.role === 'teacher') navigate('/teacher', { replace: true })
+            if (isTeacherRole(profile.role)) navigate('/teacher', { replace: true })
             else navigate('/student', { replace: true })
         }
     }, [profile, navigate])
@@ -75,6 +76,7 @@ export default function Login() {
 
                 <div className="auth-footer">
                     <p>계정이 없으신가요? <Link to="/register">학생 회원가입</Link></p>
+                    <p>초대코드가 있으신가요? <Link to="/teacher-register">관리자 가입</Link></p>
                 </div>
             </div>
         </div>

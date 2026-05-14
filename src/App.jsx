@@ -6,6 +6,8 @@ import Register from './pages/Register'
 import StudentHome from './pages/StudentHome'
 import TeacherDashboard from './pages/TeacherDashboard'
 import MyPage from './pages/MyPage'
+import TeacherRegister from './pages/TeacherRegister'
+import { ROLES } from './lib/roles'
 
 export default function App() {
     return (
@@ -15,6 +17,7 @@ export default function App() {
                     <Route path="/" element={<Navigate to="/login" replace />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/teacher-register" element={<TeacherRegister />} />
                     <Route
                         path="/student"
                         element={
@@ -26,7 +29,7 @@ export default function App() {
                     <Route
                         path="/teacher"
                         element={
-                            <ProtectedRoute requiredRole="teacher">
+                            <ProtectedRoute requiredRole={[ROLES.MASTER_TEACHER, ROLES.SUB_TEACHER]}>
                                 <TeacherDashboard />
                             </ProtectedRoute>
                         }

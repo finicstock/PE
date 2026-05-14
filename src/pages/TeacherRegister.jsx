@@ -2,17 +2,13 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-const CLASSES = Array.from({ length: 10 }, (_, i) => `${i + 1}반`)
-
-export default function Register() {
+export default function TeacherRegister() {
     const [searchParams] = useSearchParams()
     const [form, setForm] = useState({
         name: '',
         email: '',
         password: '',
         confirmPassword: '',
-        class_name: '1반',
-        student_number: '',
         invite_code: searchParams.get('code') || '',
     })
     const [error, setError] = useState('')
@@ -31,10 +27,8 @@ export default function Register() {
             setError('비밀번호가 일치하지 않습니다.')
             return
         }
-
-        const studentNumber = Number(form.student_number)
-        if (!Number.isInteger(studentNumber) || studentNumber < 1 || studentNumber > 50) {
-            setError('번호는 1번부터 50번 사이로 입력해 주세요.')
+        if (!form.invite_code.trim()) {
+            setError('마스터관리자가 발급한 초대코드를 입력해 주세요.')
             return
         }
 
@@ -51,109 +45,69 @@ export default function Register() {
             return
         }
 
-        const userId = data.user?.id
-        if (!userId) {
+        if (!data.user?.id) {
             setError('회원가입 중 오류가 발생했습니다. 다시 시도해 주세요.')
             setLoading(false)
             return
         }
 
-        const inviteCode = form.invite_code.trim()
-        const { error: profileError } = inviteCode
-            ? await supabase.rpc('redeem_invite_code', {
-                p_code: inviteCode,
-                p_name: form.name,
-                p_class_name: form.class_name,
-                p_student_number: studentNumber,
-            })
-            : await supabase.from('profiles').insert({
-                id: userId,
-                name: form.name,
-                role: 'student',
-                class_name: form.class_name,
-                student_number: studentNumber,
-            })
+        const { error: profileError } = await supabase.rpc('redeem_invite_code', {
+            p_code: form.invite_code.trim(),
+            p_name: form.name,
+            p_class_name: null,
+            p_student_number: null,
+        })
 
         if (profileError) {
-            setError('프로필 저장 중 오류: ' + profileError.message)
+            setError('관리자 등록 중 오류: ' + profileError.message)
             setLoading(false)
             return
         }
 
-        navigate('/student')
+        navigate('/teacher')
     }
 
     return (
         <div className="auth-container">
             <div className="auth-card">
                 <div className="auth-logo">
-                    <span className="logo-icon">📝</span>
-                    <h1>학생 회원가입</h1>
-                    <p>정보를 입력하고 계정을 만드세요</p>
+                    <span className="logo-icon">🏫</span>
+                    <h1>관리자 가입</h1>
+                    <p>초대코드로 서브관리자 계정을 만드세요</p>
                 </div>
 
                 <form onSubmit={handleRegister} className="auth-form">
                     <div className="form-group">
-                        <label htmlFor="name">이름</label>
+                        <label htmlFor="teacher-name">이름</label>
                         <input
-                            id="name"
+                            id="teacher-name"
                             name="name"
                             type="text"
-                            placeholder="본인 이름"
+                            placeholder="이름"
                             value={form.name}
                             onChange={handleChange}
                             required
                         />
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="class_name">반</label>
-                            <select
-                                id="class_name"
-                                name="class_name"
-                                value={form.class_name}
-                                onChange={handleChange}
-                                required
-                            >
-                                {CLASSES.map((cls) => (
-                                    <option key={cls} value={cls}>{cls}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="student_number">번호</label>
-                            <input
-                                id="student_number"
-                                name="student_number"
-                                type="number"
-                                placeholder="번호"
-                                min="1"
-                                max="50"
-                                value={form.student_number}
-                                onChange={handleChange}
-                                required
-                            />
-                        </div>
-                    </div>
-
                     <div className="form-group">
-                        <label htmlFor="invite_code">담당 교사 코드</label>
+                        <label htmlFor="teacher-invite">초대코드</label>
                         <input
-                            id="invite_code"
+                            id="teacher-invite"
                             name="invite_code"
                             type="text"
-                            placeholder="교사가 준 코드가 있으면 입력"
+                            placeholder="마스터관리자가 발급한 코드"
                             value={form.invite_code}
                             onChange={handleChange}
+                            required
                             autoCapitalize="characters"
                         />
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="reg-email">이메일</label>
+                        <label htmlFor="teacher-email">이메일</label>
                         <input
-                            id="reg-email"
+                            id="teacher-email"
                             name="email"
                             type="email"
                             placeholder="이메일 주소"
@@ -165,9 +119,9 @@ export default function Register() {
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="reg-password">비밀번호</label>
+                        <label htmlFor="teacher-password">비밀번호</label>
                         <input
-                            id="reg-password"
+                            id="teacher-password"
                             name="password"
                             type="password"
                             placeholder="6자 이상"
@@ -180,9 +134,9 @@ export default function Register() {
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="confirmPassword">비밀번호 확인</label>
+                        <label htmlFor="teacher-confirm-password">비밀번호 확인</label>
                         <input
-                            id="confirmPassword"
+                            id="teacher-confirm-password"
                             name="confirmPassword"
                             type="password"
                             placeholder="비밀번호 재입력"
@@ -196,7 +150,7 @@ export default function Register() {
                     {error && <div className="error-msg">{error}</div>}
 
                     <button type="submit" className="btn-primary" disabled={loading}>
-                        {loading ? <span className="btn-spinner" /> : '가입 완료'}
+                        {loading ? <span className="btn-spinner" /> : '관리자 가입'}
                     </button>
                 </form>
 
