@@ -1,15 +1,5 @@
-import crypto from 'node:crypto'
-
-const TEMPLATE_ID = process.env.GOOGLE_SHEET_TEMPLATE_ID || '19sQKTDoEi9I4ZEjvYrR6m0DfwAdiEsQLC5MY9yuCbwE'
-const COPY_PREFIX = process.env.GOOGLE_SHEET_COPY_PREFIX || 'SmallTalK 생활기록부'
-const START_ROW = Math.max(Number(process.env.GOOGLE_SHEET_START_ROW || 2), 1)
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3'
-const SHEETS_API_URL = 'https://sheets.googleapis.com/v4/spreadsheets'
-const GOOGLE_SCOPES = [
-    'https://www.googleapis.com/auth/drive',
-    'https://www.googleapis.com/auth/spreadsheets',
-].join(' ')
+const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL
+const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET || ''
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -23,8 +13,9 @@ export default async function handler(req, res) {
 
         if (!className) return sendJson(res, 400, { error: '반 정보가 올바르지 않습니다.' })
         if (!accessToken) return sendJson(res, 401, { error: '로그인이 필요합니다.' })
-
-        ensureServerConfig()
+        if (!APPS_SCRIPT_URL) {
+            return sendJson(res, 500, { error: 'GOOGLE_APPS_SCRIPT_URL 환경변수가 필요합니다.' })
+        }
 
         const supabase = getSupabaseConfig()
         const user = await fetchSupabaseUser(supabase, accessToken)
@@ -38,19 +29,23 @@ export default async function handler(req, res) {
         const logs = await fetchActivityLogs(supabase, accessToken, students.map((student) => student.id))
         const rows = buildRows(students, logs)
 
-        const googleToken = await getGoogleAccessToken()
-        const { file, created } = await getOrCreateClassSpreadsheet(googleToken, className)
-        const sheetTitle = await getFirstSheetTitle(googleToken, file.id)
-        await overwriteSheetRows(googleToken, file.id, sheetTitle, rows)
-        await shareSpreadsheetIfConfigured(googleToken, file.id)
+        const sheetResult = await sendRowsToAppsScript({
+            className,
+            rows,
+            actor: {
+                id: profile.id,
+                name: profile.name,
+                role: profile.role,
+            },
+        })
 
         return sendJson(res, 200, {
-            spreadsheetId: file.id,
-            url: file.webViewLink || `https://docs.google.com/spreadsheets/d/${file.id}/edit`,
+            spreadsheetId: sheetResult.spreadsheetId,
+            url: sheetResult.url,
             className,
             rows: rows.length,
-            created,
-            reused: !created,
+            created: Boolean(sheetResult.created),
+            reused: !sheetResult.created,
         })
     } catch (error) {
         console.error('class-sheet error:', error)
@@ -67,17 +62,6 @@ function getSupabaseConfig() {
         throw publicError(500, 'Supabase 환경변수가 설정되지 않았습니다.')
     }
     return { url: url.replace(/\/$/, ''), anonKey }
-}
-
-function ensureServerConfig() {
-    const missing = []
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) missing.push('GOOGLE_SERVICE_ACCOUNT_EMAIL')
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY) missing.push('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY')
-    if (!TEMPLATE_ID) missing.push('GOOGLE_SHEET_TEMPLATE_ID')
-
-    if (missing.length > 0) {
-        throw publicError(500, `Google API 환경변수가 필요합니다: ${missing.join(', ')}`)
-    }
 }
 
 async function fetchSupabaseUser(supabase, accessToken) {
@@ -185,182 +169,29 @@ function getLogContent(log) {
     return String(log.content || '').replace(/^\[태그:\s*[^\]]+\]\s*/, '')
 }
 
-async function getGoogleAccessToken() {
-    const now = Math.floor(Date.now() / 1000)
-    const assertion = signJwt({
-        iss: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        scope: GOOGLE_SCOPES,
-        aud: GOOGLE_TOKEN_URL,
-        iat: now,
-        exp: now + 3600,
-    })
-
-    const response = await fetch(GOOGLE_TOKEN_URL, {
+async function sendRowsToAppsScript(payload) {
+    const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+            ...payload,
+            secret: APPS_SCRIPT_SECRET,
         }),
     })
     const data = await parseJsonResponse(response)
-    if (!response.ok || !data.access_token) {
-        throw publicError(500, 'Google 인증에 실패했습니다.')
-    }
-    return data.access_token
-}
 
-async function getOrCreateClassSpreadsheet(accessToken, className) {
-    const fileName = `${COPY_PREFIX} - ${className}`
-    const existing = await findSpreadsheetByName(accessToken, fileName)
-    if (existing) return { file: existing, created: false }
-
-    const body = { name: fileName }
-    if (process.env.GOOGLE_SHEET_FOLDER_ID) {
-        body.parents = [process.env.GOOGLE_SHEET_FOLDER_ID]
-    }
-
-    const response = await googleFetch(
-        `${DRIVE_API_URL}/files/${TEMPLATE_ID}/copy?supportsAllDrives=true&fields=id,name,webViewLink`,
-        accessToken,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        }
-    )
-    const file = await response.json()
-    return { file, created: true }
-}
-
-async function findSpreadsheetByName(accessToken, fileName) {
-    const conditions = [
-        `name = '${escapeDriveQueryValue(fileName)}'`,
-        `mimeType = 'application/vnd.google-apps.spreadsheet'`,
-        'trashed = false',
-    ]
-
-    if (process.env.GOOGLE_SHEET_FOLDER_ID) {
-        conditions.push(`'${escapeDriveQueryValue(process.env.GOOGLE_SHEET_FOLDER_ID)}' in parents`)
-    }
-
-    const params = new URLSearchParams({
-        q: conditions.join(' and '),
-        spaces: 'drive',
-        fields: 'files(id,name,webViewLink)',
-        pageSize: '1',
-        supportsAllDrives: 'true',
-        includeItemsFromAllDrives: 'true',
-    })
-
-    const response = await googleFetch(`${DRIVE_API_URL}/files?${params.toString()}`, accessToken)
-    const data = await response.json()
-    return data.files?.[0] || null
-}
-
-async function getFirstSheetTitle(accessToken, spreadsheetId) {
-    if (process.env.GOOGLE_SHEET_TAB_NAME) return process.env.GOOGLE_SHEET_TAB_NAME
-
-    const response = await googleFetch(
-        `${SHEETS_API_URL}/${spreadsheetId}?fields=sheets(properties(title))`,
-        accessToken
-    )
-    const data = await response.json()
-    return data.sheets?.[0]?.properties?.title || 'Sheet1'
-}
-
-async function overwriteSheetRows(accessToken, spreadsheetId, sheetTitle, rows) {
-    const clearRange = `${quoteSheetName(sheetTitle)}!A${START_ROW}:E`
-    await googleFetch(
-        `${SHEETS_API_URL}/${spreadsheetId}/values/${encodeURIComponent(clearRange)}:clear`,
-        accessToken,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-        }
-    )
-
-    if (rows.length === 0) return
-
-    const updateRange = `${quoteSheetName(sheetTitle)}!A${START_ROW}:E${START_ROW + rows.length - 1}`
-    await googleFetch(
-        `${SHEETS_API_URL}/${spreadsheetId}/values/${encodeURIComponent(updateRange)}?valueInputOption=USER_ENTERED`,
-        accessToken,
-        {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ values: rows }),
-        }
-    )
-}
-
-async function shareSpreadsheetIfConfigured(accessToken, fileId) {
-    const emails = (process.env.GOOGLE_SHEET_SHARE_EMAILS || '')
-        .split(',')
-        .map((email) => email.trim())
-        .filter(Boolean)
-
-    for (const email of emails) {
-        await googleFetch(
-            `${DRIVE_API_URL}/files/${fileId}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
-            accessToken,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'user',
-                    role: 'writer',
-                    emailAddress: email,
-                }),
-            }
+    if (!response.ok || data?.ok === false) {
+        throw publicError(
+            response.status || 500,
+            data?.error || 'Apps Script가 구글시트 반영에 실패했습니다.'
         )
     }
-}
 
-async function googleFetch(url, accessToken, options = {}) {
-    const response = await fetch(url, {
-        ...options,
-        headers: {
-            ...(options.headers || {}),
-            Authorization: `Bearer ${accessToken}`,
-        },
-    })
-
-    if (!response.ok) {
-        const data = await parseJsonResponse(response)
-        console.error('Google API error:', data)
-        throw publicError(response.status, data?.error?.message || 'Google API 요청에 실패했습니다.')
+    if (!data?.url || !data?.spreadsheetId) {
+        throw publicError(500, 'Apps Script 응답에 구글시트 링크가 없습니다.')
     }
 
-    return response
-}
-
-function signJwt(payload) {
-    const header = { alg: 'RS256', typ: 'JWT' }
-    const encodedHeader = base64Url(JSON.stringify(header))
-    const encodedPayload = base64Url(JSON.stringify(payload))
-    const content = `${encodedHeader}.${encodedPayload}`
-    const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, '\n')
-    const signature = crypto.createSign('RSA-SHA256').update(content).sign(privateKey)
-    return `${content}.${base64Url(signature)}`
-}
-
-function base64Url(value) {
-    const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value)
-    return buffer
-        .toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/g, '')
-}
-
-function quoteSheetName(name) {
-    return `'${String(name).replace(/'/g, "''")}'`
-}
-
-function escapeDriveQueryValue(value) {
-    return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    return data
 }
 
 function normalizeClassName(value) {
